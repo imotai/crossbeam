@@ -72,6 +72,12 @@ version = "0.8.5"
 path = "./crossbeam-utils"
 default-features = false
 
+[dependencies.crossbeam-skiplist]
+version = "0.8.5"
+path = "./crossbeam-skiplist"
+default-features = false
+
+
 [dev-dependencies]
 rand = "0.8"
 

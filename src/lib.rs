@@ -84,7 +84,7 @@ cfg_if! {
 
         #[doc(inline)]
         pub use crossbeam_channel as channel;
-        pub use crossbeam_channel::select;
+        pub use crossbeam_skiplist as skiplist;
 
         pub use crossbeam_utils::sync;
 
