@@ -315,6 +315,10 @@ where
         }
     }
 
+    pub fn shared_iter(&self) -> base::SharedIter<K, V> {
+        self.inner.shared_iter()
+    }
+
     /// Returns an iterator over a subset of entries in the map.
     ///
     /// This iterator returns [`Entry`]s which

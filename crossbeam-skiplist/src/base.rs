@@ -13,6 +13,7 @@ use core::sync::atomic::{fence, AtomicUsize, Ordering};
 use crate::epoch::{self, Atomic, Collector, Guard, Shared};
 use crate::utils::CachePadded;
 
+
 /// Number of bits needed to store height.
 const HEIGHT_BITS: usize = 5;
 
@@ -500,6 +501,21 @@ where
         }
     }
 
+    pub fn shared_iter(&self) -> SharedIter<K, V> {
+        unsafe {
+            // Load the front node.
+            //
+            // Unprotected loads are okay because this function is the only one currently using
+            // the skip list.
+            let front = self.head[0]
+                .load(Ordering::Relaxed, epoch::unprotected())
+                .as_raw();
+            SharedIter {
+                node: front as *const Node<K, V>,
+            }
+        }
+    }
+
     /// Returns an iterator over all entries in the skip list.
     pub fn ref_iter(&self) -> RefIter<'_, K, V> {
         RefIter {
@@ -508,6 +524,7 @@ where
             tail: None,
         }
     }
+
 
     /// Returns an iterator over a subset of entries in the skip list.
     pub fn range<'a: 'g, 'g, Q, R>(
@@ -1679,6 +1696,7 @@ where
     }
 }
 
+
 /// An iterator over reference-counted entries of a `SkipList`.
 pub struct RefIter<'a, K, V> {
     parent: &'a SkipList<K, V>,
@@ -1990,6 +2008,40 @@ where
         }
         if let Some(e) = mem::replace(&mut self.tail, None) {
             unsafe { e.node.decrement(guard) };
+        }
+    }
+}
+
+pub struct SharedIter<K, V> {
+    node: *const Node<K, V>,
+}
+
+unsafe impl<K, V> Send for SharedIter<K, V> {}
+
+impl<K, V> Iterator for SharedIter<K, V> {
+    type Item = (K, V);
+    fn next(&mut self) -> Option<(K, V)> {
+        loop {
+            // Have we reached the end of the skip list?
+            if self.node.is_null() {
+                return None;
+            }
+            unsafe {
+                // Take the key and value out of the node.
+                let key = ptr::read(&(*self.node).key);
+                let value = ptr::read(&(*self.node).value);
+                // Get the next node in the skip list.
+                //
+                // Unprotected loads are okay because this function is the only one currently using
+                // the skip list.
+                let next = (*self.node).tower[0].load(Ordering::Relaxed, epoch::unprotected());
+                self.node = next.as_raw() as *const Node<K, V>;
+                // The current node may be marked. If it is, it's been removed from the skip list
+                // and we should just skip it.
+                if next.tag() == 0 {
+                    return Some((key, value));
+                }
+            }
         }
     }
 }
